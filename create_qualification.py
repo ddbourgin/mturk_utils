@@ -1,12 +1,13 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 import os
-from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
+from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter, RawDescriptionHelpFormatter
 
 import boto3
 import numpy as np
 
-"""
+DESCRIPTION = \
+    """
 Create a new worker qualification. Useful in preparation for making
 invitation-only makeup HITs.
 
@@ -16,6 +17,10 @@ Usage
     >>> export AWS_SECRET_ACCESS_KEY=<MTurk secret access key>
     >>> create_qualification.py <Qualification Name> <Long Description>
 """
+
+
+class CustomFormatter(ArgumentDefaultsHelpFormatter, RawDescriptionHelpFormatter):
+    pass
 
 
 def all_pages(func, **kwargs):
@@ -46,24 +51,22 @@ def mturk_client():
 
 if __name__ == "__main__":
     parser = ArgumentParser(
-        formatter_class=ArgumentDefaultsHelpFormatter)
+        description=DESCRIPTION,
+        formatter_class=CustomFormatter)
 
     parser.add_argument(
         "name",
         metavar="NAME",
         type=str,
-        nargs=1,
-        help="The name for the new qualification. This name is used to "
-        "represent the qualification to workers, and to find the type using a "
-        "qualification type search.")
+        help="name of the new qualification. used to "
+        "represent the qualification to workers")
 
     parser.add_argument(
         "description",
         metavar="DESCRIPTION",
         type=str,
-        nargs=1,
-        help="A long description for the Qualification type. The long "
-        "description is displayed when a worker examines the qualification.")
+        help="long description for the qualification. this is "
+        "displayed when a worker examines the qualification")
 
     args = parser.parse_args()
 

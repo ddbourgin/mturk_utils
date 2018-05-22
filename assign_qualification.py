@@ -1,11 +1,12 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 import os
-from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
+from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter, RawDescriptionHelpFormatter
 
 import boto3
 
-"""
+DESCRIPTION = \
+    """
 Assign a qualification to a given worker ID/IDs. Useful for setting up
 invitation-only makeup HITs.
 
@@ -15,6 +16,10 @@ Usage
     >>> export AWS_SECRET_ACCESS_KEY=<MTurk secret access key>
     >>> assign_qualification.py <qualification id> <worker id>
 """
+
+
+class CustomFormatter(ArgumentDefaultsHelpFormatter, RawDescriptionHelpFormatter):
+    pass
 
 
 def all_pages(func, **kwargs):
@@ -45,24 +50,25 @@ def mturk_client():
 
 if __name__ == "__main__":
     parser = ArgumentParser(
-        formatter_class=ArgumentDefaultsHelpFormatter)
+        description=DESCRIPTION,
+        formatter_class=CustomFormatter)
 
     parser.add_argument(
         "qualification",
         metavar="QUALIFICATION",
-        help="Qualification id.")
+        help="qualification ID")
 
     parser.add_argument(
         "--value",
         default=1,
         type=int,
-        help="Qualification score.")
+        help="qualification value")
 
     parser.add_argument(
         "workers",
         metavar="WORKER",
         nargs="*",
-        help="Worker id.")
+        help="worker ID")
 
     args = parser.parse_args()
 
