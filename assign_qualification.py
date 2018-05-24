@@ -104,9 +104,6 @@ if __name__ == "__main__":
             SendNotification=True
         )
 
-        if result != {}:
-            print(result)
-
     print('\nFinished assigning qualifications')
 
     # print out the final set of workers with the qualification
@@ -117,10 +114,10 @@ if __name__ == "__main__":
         MaxResults=100
     )
 
-    workers_w_qualification = set()
+    workers_w_qualification = []
     for page in pages:
         for worker in page['Qualifications']:
-            workers_w_qualification.add(worker)
+            workers_w_qualification.append(worker)
 
     print("{} workers with qualification {}:"
           .format(len(workers_w_qualification), args.qualification))
