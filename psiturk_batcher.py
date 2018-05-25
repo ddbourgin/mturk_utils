@@ -1,14 +1,15 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 import os
+import re
 import sys
 import time
 import logging
-from subprocess import Popen, PIPE, STDOUT
 from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter, RawDescriptionHelpFormatter
 
-DESCRIPTION = \
-    """
+import pexpect
+
+DESCRIPTION = """
 Emulate TurkPrime's HyperBatch feature to avoid accruing an extra 20% MTurk fee
 for having more than 9 subjects / HIT. Based on Dave Eargle's
 `psiturk_batcher.sh` script.
@@ -28,38 +29,51 @@ class CustomFormatter(ArgumentDefaultsHelpFormatter, RawDescriptionHelpFormatter
 
 
 logger = logging.getLogger()
-handler = logging.FileHandler('psiturk_batcher.log')
+
+# create a handler for printing to logfile
+logfile_handler = logging.FileHandler('psiturk_batcher.log')
 formatter = logging.Formatter(
     '%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-handler.setFormatter(formatter)
+logfile_handler.setFormatter(formatter)
 logger.setLevel(logging.DEBUG)
 
-# add additional handler for printing to stdout
+# create additional handler for printing to stdout
 stdout_handler = logging.StreamHandler(sys.stdout)
 formatter_stdout = logging.Formatter('%(message)s')
 stdout_handler.setFormatter(formatter_stdout)
 stdout_handler.setLevel(logging.DEBUG)
 
-logger.addHandler(handler)
+logger.addHandler(logfile_handler)
 logger.addHandler(stdout_handler)
+
+# hacky methods to permit us to use loggers with pexpect
+# https://mail.python.org/pipermail/python-list/2010-March/570847.html
+def _write(*args, **kwargs):
+    content = args[0].decode('utf-8')
+    for eol in ['\r\n', '\r', '\n']:
+        content = re.sub('\{}$'.format(eol), '', content)
+    return logger.info(content)
+
+
+def _doNothing():
+    pass
+
+# give the logger the methods required by pexpect
+logger.write = _write
+logger.flush = _doNothing
 
 
 def create_hit(n_assignments, reward, duration):
-    logger.INFO('Creating a hit with %s assignments' % n_assignments)
-    proc = Popen(
-        ['psiturk', '-e', 'hit', 'create', n_assignments, reward, duration],
-        stdout=PIPE,
-        stderr=STDOUT,
-        shell=True)
-    output, err = proc.communicate()
+    logger.info('Creating a HIT with %s assignments' % n_assignments)
 
-    if err:
-        logger.INFO('Error posting HIT!')
-        logger.INFO(err.decode('utf-8'))
-        sys.exit()
-    else:
-        logger.INFO(output.decode('utf-8'))
-    return proc
+    cmd = '"hit create {:.0f} {:.2f} {:.2f}"'.format(
+        n_assignments, reward, duration)
+
+    command = ['psiturk', '-e', cmd]
+    logger.info('> ' + ' '.join(command))
+
+    pexpect.run(" ".join(command), logfile=logger)
+    return True
 
 
 if __name__ == "__main__":
@@ -105,57 +119,66 @@ if __name__ == "__main__":
     MAX_ASSIGNMENTS_PER_HIT = args.max_assignments
 
     if HIT_REWARD <= 0:
-        raise ValueError('Invalid reward amount: {} USD'.format(HIT_REWARD))
+        raise ValueError(
+            'Invalid reward amount: {} USD'.format(HIT_REWARD))
     if HIT_DURATION <= 0:
-        raise ValueError('Invalid HIT duration: {} hours'.format(HIT_DURATION))
+        raise ValueError(
+            'Invalid HIT duration: {} hours'.format(HIT_DURATION))
     if TOTAL_ASSIGNMENTS <= 0:
         raise ValueError(
             'Invalid number of assignments: {}'.format(TOTAL_ASSIGNMENTS))
 
     # derived variables
     total_time = 60
-    n_rounds = total_time / SPACING
-    assignments_per_round = TOTAL_ASSIGNMENTS / n_rounds
+    n_rounds = int(total_time / SPACING)
+    assignments_per_round = int(TOTAL_ASSIGNMENTS / n_rounds)
     total_assignments_wo_mod = n_rounds * assignments_per_round
     assignments_remainder = TOTAL_ASSIGNMENTS % total_assignments_wo_mod
 
-    logger.INFO("Total time: %s seconds" % total_time)
-    logger.INFO("Spacing: %s seconds" % SPACING)
-    logger.INFO("Total assignments: %s" % TOTAL_ASSIGNMENTS)
-    logger.INFO("Assignments per round (ignoring modulus): %s" %
-                total_assignments_wo_mod)
-    logger.INFO("Assignments remainder to distribute: %s" %
-                assignments_remainder)
-    logger.INFO("Number of rounds: %s" % n_rounds)
+    logger.info(
+        "Total time: %s seconds" % total_time)
+    logger.info(
+        "Spacing: %s seconds" % SPACING)
+    logger.info(
+        "Total assignments: %s" % TOTAL_ASSIGNMENTS)
+    logger.info(
+        "Assignments per round (ignoring modulus): %s" % assignments_per_round)
+    logger.info(
+        "Assignments remainder to distribute: %s" % assignments_remainder)
+    logger.info(
+        "Number of rounds: %s" % n_rounds)
 
     confirm = input('\nContinue? [y/N] ').lower()
     while confirm not in ['n', 'no', 'yes', 'y']:
-        confirm = input('\nContinue? [y/N] ').lower()
+        confirm = input('Continue? [y/N] ').lower()
 
     if confirm in ['n', 'no']:
+        logger.info('Exiting...')
         sys.exit()
 
     for rr in range(1, n_rounds + 1):
-        logger.INFO("ROUND {}".format(rr))
+        logger.info("\n")
+        logger.info("ROUND {}".format(rr))
         n_assignments_this_round = assignments_per_round
 
         if rr <= assignments_remainder:
             n_assignments_this_round += 1
 
-        n_hits_this_round = n_assignments_this_round / MAX_ASSIGNMENTS_PER_HIT
+        n_hits_this_round = int(
+            n_assignments_this_round / MAX_ASSIGNMENTS_PER_HIT)
         n_assignments_for_mod_hit = n_assignments_this_round % MAX_ASSIGNMENTS_PER_HIT
-        logger.INFO("TOTAL assignments for this round: %s" %
-                    n_assignments_this_round)
+
+        logger.info(
+            "TOTAL assignments for this round: %s" % n_assignments_this_round)
 
         for hit in range(n_hits_this_round):
             proc = create_hit(MAX_ASSIGNMENTS_PER_HIT, HIT_REWARD,
                               HIT_DURATION)
 
         if n_assignments_for_mod_hit > 0:
-            proc = create_hit(n_assignments_for_mod_hit,
-                              HIT_REWARD, HIT_DURATION)
+            create_hit(n_assignments_for_mod_hit, HIT_REWARD, HIT_DURATION)
 
-        logger.INFO('Sleeping for %s seconds...' % SPACING)
+        logger.info("Sleeping for %s seconds..." % SPACING)
         time.sleep(SPACING)
 
-    logger.INFO('Finished!')
+    logger.info("Finished!")
