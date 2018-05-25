@@ -10,8 +10,8 @@ Before using the scripts below, define the following environment variables:
 ## approve_batch.py
 **Usage:** `approve_batch.py [-h] [-t TITLE]`
 
-Batch HIT approver. Only approves HITS that are listed as reviewable,
-saving a log of subject and HIT IDs that it approves to the current directory as an `.npz` fie. Can be run multiple times as more HITs are posted.
+Batch HIT approver. Only approves HITs that are listed as reviewable,
+saving a log of subject and HIT IDs that it approves to the current directory in an `.npz` archive. Can be run multiple times as more HITs are posted.
 
 #### Optional arguments
   - `-h`, `--help`            show help message and exit
