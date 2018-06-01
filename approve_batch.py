@@ -7,7 +7,7 @@ import boto3
 import numpy as np
 
 DESCRIPTION = \
-"""
+    """
 Batch HIT approver for psiturk. Only approves HITS that are listed as reviewable,
 saving a log of subject and HIT IDs that it approves (to guard against double
 payments, etc.) Script can be run multiple times as more HITs are posted.
@@ -51,6 +51,30 @@ def mturk_client():
         aws_secret_access_key=key
     )
     return client
+
+
+def credit_hit(hit_id, credited_workers=set(), credited_assignments=set()):
+    assignments = client.list_assignments_for_hit(
+        HITId=hit_id,
+        MaxResults=100,
+        AssignmentStatuses=['Submitted']
+    )
+
+    for ass in assignments['Assignments']:
+        ass_id = ass['AssignmentId']
+        worker_id = ass['WorkerId']
+        print('\tCrediting worker {} on assignment {}'
+              .format(worker_id, ass_id))
+
+        _ = client.approve_assignment(
+            AssignmentId=ass_id,
+            RequesterFeedback='Thank you for completing our experiment!',
+            OverrideRejection=False
+        )
+
+        credited_workers.add(worker_id)
+        credited_assignments.add(ass_id)
+    return credited_workers, credited_assignments
 
 
 def load_roster():
@@ -116,25 +140,28 @@ if __name__ == "__main__":
             print('Collecting workers for HIT {}, title: `{}`'
                   .format(hit['HITId'], hit['Title']))
 
-            assignments = client.list_assignments_for_hit(
-                HITId=hit['HITId'],
-                MaxResults=100,
-                AssignmentStatuses=['Submitted']
-            )
+            credited_workers, credited_assignments = credit_hit(
+                hit['HITId'], credited_workers, credited_assignments)
 
-            for ass in assignments['Assignments']:
-                ass_id = ass['AssignmentId']
-                worker_id = ass['WorkerId']
-                print('\tCrediting worker {} on assignment {}'
-                      .format(worker_id, ass_id))
-
-                _ = client.approve_assignment(
-                    AssignmentId=ass_id,
-                    RequesterFeedback='Thank you for completing our experiment!',
-                    OverrideRejection=False
-                )
-                credited_workers.add(worker_id)
-                credited_assignments.add(ass_id)
+            #  assignments = client.list_assignments_for_hit(
+            #      HITId=hit['HITId'],
+            #      MaxResults=100,
+            #      AssignmentStatuses=['Submitted']
+            #  )
+            #
+            #  for ass in assignments['Assignments']:
+            #      ass_id = ass['AssignmentId']
+            #      worker_id = ass['WorkerId']
+            #      print('\tCrediting worker {} on assignment {}'
+            #            .format(worker_id, ass_id))
+            #
+            #      _ = client.approve_assignment(
+            #          AssignmentId=ass_id,
+            #          RequesterFeedback='Thank you for completing our experiment!',
+            #          OverrideRejection=False
+            #      )
+            #      credited_workers.add(worker_id)
+            #      credited_assignments.add(ass_id)
 
             credited_hits.add(hit['HITId'])
 
